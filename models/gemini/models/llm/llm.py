@@ -223,7 +223,7 @@ class GoogleLargeLanguageModel(LargeLanguageModel):
 
         history = []
         for msg in prompt_messages:  # makes message roles strictly alternating
-            content = self._format_message_to_glm_content(msg)
+            content = self._format_message_to_glm_content(msg, credentials)
             if history and history[-1].role == content.role:
                 history[-1].parts.extend(content.parts)
             else:
@@ -266,7 +266,7 @@ class GoogleLargeLanguageModel(LargeLanguageModel):
             raise ValueError(f"Got unknown type {message}")
         return message_text
 
-    def _format_message_to_glm_content(self, message: PromptMessage) -> types.Content:
+    def _format_message_to_glm_content(self, message: PromptMessage, credentials: dict) -> types.Content:
         """
         Format a single message into glm.Content for Google API
 
@@ -282,7 +282,7 @@ class GoogleLargeLanguageModel(LargeLanguageModel):
                     if c.type == PromptMessageContentType.TEXT:
                         glm_content.parts.append(types.Part.from_text(text=c.data))
                     else:
-                        f = self._upload_file_content_to_google(message_content=c)
+                        f = self._upload_file_content_to_google(message_content=c, credentials=credentials)
                         glm_content.parts.append(types.Part.from_uri(file_uri=f.uri, mime_type=f.mime_type))
 
             return glm_content
@@ -309,7 +309,7 @@ class GoogleLargeLanguageModel(LargeLanguageModel):
             raise ValueError(f"Got unknown type {message}")
 
     def _upload_file_content_to_google(
-        self, message_content: MultiModalPromptMessageContent
+        self, message_content: MultiModalPromptMessageContent, credentials: dict
     ) -> types.File:
 
         key = f"{message_content.type.value}:{hash(message_content.data)}"
@@ -324,12 +324,17 @@ class GoogleLargeLanguageModel(LargeLanguageModel):
                 temp_file.write(file_content)
             else:
                 try:
-                    response = requests.get(message_content.url)
+                    file_url = message_content.url
+                    if "file_url" in credentials and credentials["file_url"]:
+                        file_url = f"{credentials["file_url"].rstrip('/')}/files{message_content.url.split("/files")[-1]}"
+                    if not file_url.startswith("https://") and not file_url.startswith("http://"):
+                        raise ValueError(f"Set FILES_URL env first!")
+                    response = requests.get(file_url)
                     response.raise_for_status()
                     temp_file.write(response.content)
                 except Exception as ex:
                     raise ValueError(
-                        f"Failed to fetch data from url {message_content.url}, {ex}"
+                        f"Failed to fetch data from url {file_url} {ex}"
                     )
             temp_file.flush()
         file = self.client.files.upload(
