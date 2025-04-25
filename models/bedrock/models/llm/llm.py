@@ -1444,3 +1444,17 @@ class BedrockLargeLanguageModel(LargeLanguageModel):
                 })
         
         return formatted_messages
+    def _convert_messages_to_prompt(
+            self, messages: list[PromptMessage], model_prefix: str, model_name: Optional[str] = None
+    ) -> str:
+        if not messages:
+            return ""
+
+        messages = messages.copy()  # don't mutate the original list
+        if not isinstance(messages[-1], AssistantPromptMessage):
+            messages.append(AssistantPromptMessage(content=""))
+
+        text = "".join(self._convert_one_message_to_text(message, model_prefix, model_name) for message in messages)
+
+        # trim off the trailing ' ' that might come from the "Assistant: "
+        return text.rstrip()
