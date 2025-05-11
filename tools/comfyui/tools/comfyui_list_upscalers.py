@@ -18,5 +18,4 @@ class ComfyuiListSamplers(Tool):
         if not base_url:
             yield self.create_text_message("Please input base_url")
         cli = ComfyUiClient(base_url)
-        yield self.create_variable_message("sampling_methods", cli.get_samplers())
-        yield self.create_variable_message("schedulers", cli.get_schedulers())
+        yield self.create_variable_message("upscale_models", cli.get_upscale_models())

@@ -38,8 +38,11 @@ tools:
 - tools/comfyui_txt2img.yaml
 - tools/comfyui_img2img.yaml
 - tools/comfyui_img2vid.yaml
+- tools/comfyui_upscale.yaml
 - tools/comfyui_depth_anything.yaml
 - tools/comfyui_depth_pro.yaml
 - tools/comfyui_face_swap.yaml
 - tools/comfyui_list_models.yaml
 - tools/comfyui_list_samplers.yaml
+- tools/comfyui_list_upscalers.yaml
+- tools/comfyui_image_info.yaml

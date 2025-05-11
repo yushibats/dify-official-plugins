@@ -42,6 +42,20 @@ class ComfyUiClient:
         except Exception as e:
             return []
 
+    def get_upscale_models(self) -> list[str]:
+        """
+        get upscale models
+        """
+        try:
+            api_url = str(self.base_url / "models" / "upscale_models")
+            response = httpx.get(url=api_url, timeout=(2, 10))
+            if response.status_code != 200:
+                return []
+            else:
+                return response.json()
+        except Exception as e:
+            return []
+
     def get_loras(self) -> list[str]:
         """
         get loras
@@ -90,14 +104,16 @@ class ComfyUiClient:
             return []
 
     def get_history(self, prompt_id: str) -> dict:
-        res = httpx.get(str(self.base_url / "history"), params={"prompt_id": prompt_id})
+        res = httpx.get(str(self.base_url / "history"),
+                        params={"prompt_id": prompt_id})
         history = res.json()[prompt_id]
         return history
 
     def get_image(self, filename: str, subfolder: str, folder_type: str) -> bytes:
         response = httpx.get(
             str(self.base_url / "view"),
-            params={"filename": filename, "subfolder": subfolder, "type": folder_type},
+            params={"filename": filename,
+                    "subfolder": subfolder, "type": folder_type},
         )
         return response.content
 
@@ -112,7 +128,8 @@ class ComfyUiClient:
             "overwrite": "true",
         }
         try:
-            res = requests.post(str(self.base_url / "upload" / "image"), files=files)
+            res = requests.post(
+                str(self.base_url / "upload" / "image"), files=files)
             image_name = res.json().get("name")
             return image_name
         except:
@@ -142,7 +159,8 @@ class ComfyUiClient:
         self, origin_prompt: dict, positive_prompt: str, negative_prompt: str = ""
     ) -> dict:
         prompt = origin_prompt.copy()
-        id_to_class_type = {id: details["class_type"] for id, details in prompt.items()}
+        id_to_class_type = {id: details["class_type"]
+                            for id, details in prompt.items()}
         k_sampler = [
             key for key, value in id_to_class_type.items() if value == "KSampler"
         ][0]
@@ -167,7 +185,8 @@ class ComfyUiClient:
         self, origin_prompt: dict, image_names: list[str]
     ) -> dict:
         prompt = origin_prompt.copy()
-        id_to_class_type = {id: details["class_type"] for id, details in prompt.items()}
+        id_to_class_type = {id: details["class_type"]
+                            for id, details in prompt.items()}
         load_image_nodes = [
             key for key, value in id_to_class_type.items() if value == "LoadImage"
         ]
@@ -180,9 +199,11 @@ class ComfyUiClient:
         if seed_id not in prompt:
             raise Exception("Not a valid seed node")
         if "seed" in prompt[seed_id]["inputs"]:
-            prompt[seed_id]["inputs"]["seed"] = random.randint(10**14, 10**15 - 1)
+            prompt[seed_id]["inputs"]["seed"] = random.randint(
+                10**14, 10**15 - 1)
         elif "noise_seed" in prompt[seed_id]["inputs"]:
-            prompt[seed_id]["inputs"]["noise_seed"] = random.randint(10**14, 10**15 - 1)
+            prompt[seed_id]["inputs"]["noise_seed"] = random.randint(
+                10**14, 10**15 - 1)
         else:
             raise Exception("Not a valid seed node")
         return prompt
@@ -198,7 +219,8 @@ class ComfyUiClient:
                 if message["type"] == "progress":
                     data = message["data"]
                     current_step = data["value"]
-                    print("In K-Sampler -> Step: ", current_step, " of: ", data["max"])
+                    print("In K-Sampler -> Step: ",
+                          current_step, " of: ", data["max"])
                 if message["type"] == "execution_cached":
                     data = message["data"]
                     for itm in data["nodes"]:
@@ -235,7 +257,8 @@ class ComfyUiClient:
         url = str(self.base_url / "view")
         response = httpx.get(
             url,
-            params={"filename": filename, "subfolder": subfolder, "type": folder_type},
+            params={"filename": filename,
+                    "subfolder": subfolder, "type": folder_type},
             timeout=(2, 10),
         )
         return response.content
@@ -279,7 +302,8 @@ class ComfyUiClient:
             ws_url = str(self.base_url).replace("https", "ws")
         else:
             ws_url = str(self.base_url).replace("http", "ws")
-        ws.connect(str(URL(f"{ws_url}") / "ws") + f"?clientId={client_id}", timeout=120)
+        ws.connect(str(URL(f"{ws_url}") / "ws") +
+                   f"?clientId={client_id}", timeout=120)
         output_images = {}
         while True:
             out = ws.recv()

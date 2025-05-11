@@ -17,23 +17,7 @@ from dify_plugin import Tool
 
 from tools.comfyui_client import ComfyUiClient, FileType
 
-SD_TXT2IMG_OPTIONS = {}
-LORA_NODE = {
-    "inputs": {
-        "lora_name": "",
-        "strength_model": 1,
-        "strength_clip": 1,
-        "model": ["11", 0],
-        "clip": ["11", 1],
-    },
-    "class_type": "LoraLoader",
-    "_meta": {"title": "Load LoRA"},
-}
-FluxGuidanceNode = {
-    "inputs": {"guidance": 3.5, "conditioning": ["6", 0]},
-    "class_type": "FluxGuidance",
-    "_meta": {"title": "FluxGuidance"},
-}
+SD_UPSCALE_OPTIONS = {}
 
 
 class ModelType(Enum):
@@ -43,7 +27,7 @@ class ModelType(Enum):
     FLUX = 4
 
 
-class ComfyuiImg2Img(Tool):
+class ComfyuiUpscaler(Tool):
     def _invoke(
         self, tool_parameters: dict[str, Any]
     ) -> Generator[ToolInvokeMessage, None, None]:
@@ -61,29 +45,10 @@ class ComfyuiImg2Img(Tool):
         if not model:
             yield self.create_text_message("Please input model")
             return
-        if model not in self.comfyui.get_checkpoints():
+        if model not in self.comfyui.get_upscale_models():
             raise ToolProviderCredentialValidationError(
                 f"model {model} does not exist")
-        prompt = tool_parameters.get("prompt", "")
-        if not prompt:
-            yield self.create_text_message("Please input prompt")
-            return
-        negative_prompt = tool_parameters.get("negative_prompt", "")
-        steps = tool_parameters.get("steps", 20)
-        valid_samplers = self.comfyui.get_samplers()
-        valid_schedulers = self.comfyui.get_schedulers()
-        sampler_name = tool_parameters.get("sampler_name", "euler")
-        if sampler_name not in valid_samplers:
-            raise ToolProviderCredentialValidationError(
-                f"sampler {sampler_name} does not exist"
-            )
-        scheduler = tool_parameters.get("scheduler", "normal")
-        if scheduler not in valid_schedulers:
-            raise ToolProviderCredentialValidationError(
-                f"scheduler {scheduler} does not exist"
-            )
-        cfg = tool_parameters.get("cfg", 7.0)
-        denoise = tool_parameters.get("denoise", 0.8)
+
         images = tool_parameters.get("images") or []
         image_names = []
         for image in images:
@@ -95,48 +60,14 @@ class ComfyuiImg2Img(Tool):
         if len(image_names) == 0:
             yield self.create_text_message("Please input images")
             return
-        yield from self.img2img(
-            model=model,
-            denoise=denoise,
-            prompt=prompt,
-            negative_prompt=negative_prompt,
-            image_name=image_names[0],
-            steps=steps,
-            sampler_name=sampler_name,
-            scheduler=scheduler,
-            cfg=cfg,
-        )
 
-    def img2img(
-        self,
-        model: str,
-        denoise: float,
-        prompt: str,
-        negative_prompt: str,
-        steps: int,
-        image_name: str,
-        sampler_name: str,
-        scheduler: str,
-        cfg: float,
-    ) -> Generator[ToolInvokeMessage, None, None]:
-        """
-        generate image
-        """
-        if not SD_TXT2IMG_OPTIONS:
+        if not SD_UPSCALE_OPTIONS:
             current_dir = os.path.dirname(os.path.realpath(__file__))
-            with open(os.path.join(current_dir, "img2img.json")) as file:
-                SD_TXT2IMG_OPTIONS.update(json.load(file))
-        draw_options = deepcopy(SD_TXT2IMG_OPTIONS)
-        draw_options["3"]["inputs"]["steps"] = steps
-        draw_options["3"]["inputs"]["sampler_name"] = sampler_name
-        draw_options["3"]["inputs"]["scheduler"] = scheduler
-        draw_options["3"]["inputs"]["cfg"] = cfg
-        draw_options["3"]["inputs"]["denoise"] = denoise
-        draw_options["3"]["inputs"]["seed"] = random.randint(0, 100000000)
-        draw_options["14"]["inputs"]["ckpt_name"] = model
-        draw_options["6"]["inputs"]["text"] = prompt
-        draw_options["7"]["inputs"]["text"] = negative_prompt
-        draw_options["10"]["inputs"]["image"] = image_name
+            with open(os.path.join(current_dir, "upscale.json")) as file:
+                SD_UPSCALE_OPTIONS.update(json.load(file))
+        draw_options = deepcopy(SD_UPSCALE_OPTIONS)
+        draw_options["13"]["inputs"]["ckpt_name"] = model
+        draw_options["16"]["inputs"]["image"] = image_name
 
         try:
             client_id = str(uuid.uuid4())
