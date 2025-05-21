@@ -18,6 +18,15 @@ credentials_for_provider:
       zh_Hans: 请输入你的 CivitAI API Key
     required: false
     type: text-input
+  hf_api_key:
+    label:
+      en_US: Hugging Face API Key
+      zh_Hans: Hugging Face API Key
+    placeholder:
+      en_US: Please input your Hugging Face API Key
+      zh_Hans: 请输入你的 Hugging Face API Key
+    required: false
+    type: text-input
 extra:
   python:
     source: provider/comfyui.py
@@ -32,18 +41,18 @@ identity:
     zh_Hans: ComfyUI
   name: comfyui
   tags:
-  - image
+    - image
 tools:
-- tools/comfyui_workflow.yaml
-- tools/comfyui_txt2img.yaml
-- tools/comfyui_img2img.yaml
-- tools/comfyui_img2vid.yaml
-- tools/comfyui_upscale.yaml
-- tools/comfyui_depth_anything.yaml
-- tools/comfyui_depth_pro.yaml
-- tools/comfyui_face_swap.yaml
-- tools/comfyui_list_models.yaml
-- tools/comfyui_list_samplers.yaml
-- tools/comfyui_image_info.yaml
-- tools/download_civitai.yaml
-- tools/download_huggingface.yaml
+  - tools/workflow.yaml
+  - tools/txt2img.yaml
+  - tools/img2img.yaml
+  - tools/img2vid.yaml
+  - tools/upscale.yaml
+  - tools/depth_anything.yaml
+  - tools/depth_pro.yaml
+  - tools/face_swap.yaml
+  - tools/list_models.yaml
+  - tools/list_samplers.yaml
+  - tools/image_info.yaml
+  - tools/download_civitai.yaml
+  - tools/download_huggingface.yaml

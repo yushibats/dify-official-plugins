@@ -9,7 +9,7 @@ description:
   llm: upscales an given image.
 extra:
   python:
-    source: tools/comfyui_upscale.py
+    source: tools/upscale.py
 identity:
   author: yt-koike
   label:

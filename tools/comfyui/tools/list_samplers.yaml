@@ -9,7 +9,7 @@ description:
   llm: Lists available samplers and schedulers on connected ComfyUI.
 extra:
   python:
-    source: tools/comfyui_list_samplers.py
+    source: tools/list_samplers.py
 identity:
   author: yt-koike
   label:

@@ -9,7 +9,7 @@ description:
   llm: gets basic information of given images including sizes, filenames, MIMEs and Pillow modes
 extra:
   python:
-    source: tools/comfyui_image_info.py
+    source: tools/image_info.py
 identity:
   author: yt-koike
   label:

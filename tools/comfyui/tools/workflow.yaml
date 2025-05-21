@@ -6,7 +6,7 @@ description:
   llm: Run ComfyUI workflow.
 extra:
   python:
-    source: tools/comfyui_workflow.py
+    source: tools/workflow.py
 identity:
   author: hjlarry
   label:
@@ -15,36 +15,15 @@ identity:
   name: workflow
 parameters:
   - form: llm
-    label:
-      en_US: Prompt
-      zh_Hans: 提示词
-      ja_JP: プロンプト
-    llm_description:
-      Image prompt, you should describe the image you want to generate
-      as a list of words as possible as detailed, the prompt must be written in English.
-    name: positive_prompt
-    type: string
     human_description:
-      en_US:
-        Image prompt, you can check the official documentation of Stable Diffusion
-        or FLUX
-      zh_Hans: 图像提示词，您可以查看 Stable Diffusion 或者 FLUX 的官方文档
-      ja_JP: プロンプト．Stable Diffusion や FLUX の公式ドキュメントをご参照ください。
-  - form: llm
+      en_US: exported from ComfyUI workflow
+      zh_Hans: 从ComfyUI的工作流中导出
+      ja_JP: ComfyUI よりエクスポートされたワークフロー
     label:
-      en_US: Negative Prompt
-      zh_Hans: 负面提示词
-    llm_description:
-      Negative prompt, you should describe the image you don't want to
-      generate as a list of words as possible as detailed, the prompt must be written
-      in English.
-    human_description:
-      en_US:
-        Negative prompt, you can check the official documentation of Stable Diffusion
-        or FLUX
-      zh_Hans: 负面提示词，您可以查看 Stable Diffusion 或者 FLUX 的官方文档
-      ja_JP: ネガティブプロンプト
-    name: negative_prompt
+      en_US: Workflow JSON
+      ja_JP: ワークフロー JSON
+    name: workflow_json
+    required: true
     type: string
   - form: llm
     label:
@@ -59,17 +38,6 @@ parameters:
       ja_JP: 入力画像
     name: images
     type: files
-  - form: llm
-    human_description:
-      en_US: exported from ComfyUI workflow
-      zh_Hans: 从ComfyUI的工作流中导出
-      ja_JP: ComfyUI よりエクスポートされたワークフロー
-    label:
-      en_US: Workflow JSON
-      ja_JP: ワークフロー JSON
-    name: workflow_json
-    required: true
-    type: string
   - form: llm
     human_description:
       en_US:

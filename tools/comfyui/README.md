@@ -10,31 +10,23 @@
 
 Please refer to its [official documentation](https://docs.comfy.org/get_started/gettingstarted) to ensure that ComfyUI can run normally and generate images.
 
-### 2. Prompt setting
-
-If you don't need Dify to pass in the prompt, you can skip this step. If your prompt node is connected to the only `KSampler` node in ComfyUI, you can skip this step.
-
-Otherwise, use the string `{positive_prompt}` to replace the positive prompt content, and `{negative_prompt}` to replace the negative prompt content.
-
-![](./_assets/comfyui_1.PNG)
-
-### 3. Export the API file of the workflow
+### 2. Export the API file of the workflow
 
 ![](./_assets/comfyui_2.PNG)
 
 As shown in the figure, select `Save(API Format)`. If there is no such selection, you need to enable `Dev Mode` in the settings.
 
-### 4. Get ComfyUI tools from Plugin Marketplace
+### 3. Get ComfyUI tools from Plugin Marketplace
 
 The ComfyUI tools could be found at the Plugin Marketplace, please install it first.
 
-### 5. Integrate ComfyUI in Dify
+### 4. Integrate ComfyUI in Dify
 
 On the Dify navigation page, click `Tools > ComfyUI > To Authentication` and fill in the URL of ComfyUI Server.
 
 ![](./_assets/comfyui_3.PNG)
 
-### 6. Use ComfyUI in Dify
+### 5. Use ComfyUI in Dify
 
 You can use the ComfyUI tool in the following application types:
 
@@ -48,7 +40,7 @@ Both Chatflow and Workflow applications support the `ComfyUI` tool node. After a
 
 Add the `ComfyUI` tool in the Agent application, then send a picture description in the dialog box to call the tool to generate an AI image.
 
-### 7. Image input
+### Image input
 
 Some ComfyUI workflows require multiple images inputs. In Dify, it will find every `LoadImage` node in the `WORKFLOW JSON` and fill in the image files input by the user in order. When you want to change this order, you can adjust it by filling in the `Image node ID list`. For example, if your workflow needs to input images into the 35th, 69th, and 87th nodes, then input `69,35,87` will pass the first image to the 69th node.
 
@@ -117,8 +109,8 @@ These two IDs are shown as AIR(see the highlited area on the image below).
 
 ![](_assets/AIR.jpg)
 
-You need to install https://github.com/ciri/comfyui-model-downloader to ComfyUI in advance.
+You need to install https://github.com/ServiceStack/comfy-asset-downloader to ComfyUI in advance.
 
 ### Hugging Face Download
 Hugging Face Download can download models from [Hugging Face](https://huggingface.co/).
-You need to install https://github.com/ciri/comfyui-model-downloader to ComfyUI in advance.
+You need to install https://github.com/ServiceStack/comfy-asset-downloader to ComfyUI in advance.

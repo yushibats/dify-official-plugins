@@ -7,7 +7,7 @@ description:
   llm: edits an given image as you want based on your prompt.
 extra:
   python:
-    source: tools/comfyui_img2img.py
+    source: tools/img2img.py
 identity:
   author: yt-koike
   label:

@@ -7,7 +7,7 @@ description:
   llm: lists available checkpoints on connected ComfyUI.
 extra:
   python:
-    source: tools/comfyui_list_models.py
+    source: tools/list_models.py
 identity:
   author: yt-koike
   label:

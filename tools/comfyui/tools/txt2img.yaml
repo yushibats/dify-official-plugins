@@ -14,7 +14,7 @@ description:
   llm: draw the image you want based on your prompt.
 extra:
   python:
-    source: tools/comfyui_txt2img.py
+    source: tools/txt2img.py
 identity:
   author: Qun
   label:
@@ -44,6 +44,21 @@ parameters:
       be written in English.
     name: prompt
     required: true
+    type: string
+  - name: negative_prompt
+    default: bad art, ugly, deformed, watermark, duplicated, discontinuous lines
+    form: llm
+    human_description:
+      en_US: Negative prompt
+      pt_BR: Negative prompt
+      zh_Hans: Negative prompt
+      ja_JP: ネガティブプロンプト
+    label:
+      en_US: Negative prompt
+      pt_BR: Negative prompt
+      zh_Hans: Negative prompt
+      ja_JP: ネガティブプロンプト
+    required: false
     type: string
   - form: llm
     human_description:
@@ -118,21 +133,7 @@ parameters:
     name: height
     required: false
     type: number
-  - default: bad art, ugly, deformed, watermark, duplicated, discontinuous lines
-    form: llm
-    human_description:
-      en_US: Negative prompt
-      pt_BR: Negative prompt
-      zh_Hans: Negative prompt
-      ja_JP: ネガティブプロンプト
-    label:
-      en_US: Negative prompt
-      pt_BR: Negative prompt
-      zh_Hans: Negative prompt
-      ja_JP: ネガティブプロンプト
-    name: negative_prompt
-    required: false
-    type: string
+
   - default: 7.0
     form: llm
     human_description:

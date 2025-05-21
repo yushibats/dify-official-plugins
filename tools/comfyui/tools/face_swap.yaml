@@ -6,7 +6,7 @@ description:
   llm: swap faces
 extra:
   python:
-    source: tools/comfyui_face_swap.py
+    source: tools/face_swap.py
 identity:
   author: yt-koike
   label:

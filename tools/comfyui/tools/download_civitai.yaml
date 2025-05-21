@@ -33,10 +33,10 @@ parameters:
     llm_description: Version ID
     type: number
     human_description:
-      en_US: Version ID
-      zh_Hans: 版本 ID
-      ja_JP: バージョン ID
-    required: true
+      en_US: Version ID. If none, the latest model will be installed.
+      zh_Hans: 版本 ID. 如果没有，将安装最新的型号.
+      ja_JP: バージョン ID. 指定なしの場合は最新版をダウンロードします.
+    required: false
   - name: save_dir
     form: form
     label:

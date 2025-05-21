@@ -9,7 +9,7 @@ description:
   llm: generates video from image
 extra:
   python:
-    source: tools/comfyui_img2vid.py
+    source: tools/img2vid.py
 identity:
   author: yt-koike
   label:

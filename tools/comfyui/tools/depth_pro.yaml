@@ -9,7 +9,7 @@ description:
   llm: estimates depth of a regular RGB image
 extra:
   python:
-    source: tools/comfyui_depth_pro.py
+    source: tools/depth_pro.py
 identity:
   author: yt-koike
   label:

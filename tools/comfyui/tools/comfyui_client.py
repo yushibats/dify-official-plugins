@@ -7,6 +7,7 @@ import httpx
 import requests
 from websocket import WebSocket
 from yarl import URL
+from dify_plugin.errors.tool import ToolProviderCredentialValidationError
 
 
 class FileType(StrEnum):
@@ -137,7 +138,11 @@ class ComfyUiClient:
             str(self.base_url / "prompt"),
             json={"client_id": client_id, "prompt": prompt},
         )
-        prompt_id = res.json()["prompt_id"]
+        try:
+            prompt_id = res.json()["prompt_id"]
+        except:
+            raise ToolProviderCredentialValidationError(
+                "Error queuing the prompt. Please check the workflow JSON.")
         return prompt_id
 
     def open_websocket_connection(self) -> tuple[WebSocket, str]:
