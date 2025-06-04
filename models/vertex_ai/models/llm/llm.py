@@ -42,6 +42,8 @@ from dify_plugin.interfaces.model.large_language_model import LargeLanguageModel
 from google.api_core import exceptions
 from google.cloud import aiplatform
 from google.oauth2 import service_account
+from google import genai
+from google.genai.types import Tool, GenerateContentConfig, GoogleSearch
 from PIL import Image
 
 
@@ -348,28 +350,56 @@ class VertexAiLargeLanguageModel(LargeLanguageModel):
         :param tools: tool messages
         :return: glm tools
         """
-        return [
-            glm.Tool(
-                function_declarations=[
-                    glm.FunctionDeclaration(
-                        name=tool.name,
-                        parameters=dict(
-                            type="object",
-                            properties={
-                                key: {
-                                    "type_": value.get("type", "string").upper(),
-                                    "description": value.get("description", ""),
-                                    "enum": value.get("enum", []),
-                                }
-                                for (key, value) in tool.parameters.get("properties", {}).items()
-                            },
-                            required=tool.parameters.get("required", []),
-                        ),
-                    )
-                    for tool in tools
-                ]
+        tool_declarations = []
+        for tool_config in tools:
+            properties_for_schema = {}
+            
+            # tool_config.parameters is guaranteed to be a dict by the Pydantic model
+            parameters_input_dict = tool_config.parameters
+            raw_properties = parameters_input_dict.get("properties", {})
+
+            if isinstance(raw_properties, dict):
+                for key, value_schema in raw_properties.items():
+                    if not isinstance(value_schema, dict):
+                        # Property schema must be a dictionary
+                        continue
+
+                    raw_type_str = str(value_schema.get("type", "string")).upper()
+                    # Map "SELECT" to "STRING" for Vertex AI compatibility
+                    final_type_for_prop = "STRING" if raw_type_str == "SELECT" else raw_type_str
+                    
+                    prop_details = {
+                        "type_": final_type_for_prop, # Vertex AI SDK maps 'type_' to protobuf 'type'
+                        "description": value_schema.get("description", ""),
+                    }
+                    
+                    enum_values = value_schema.get("enum")
+                    # Add enum only if it's a non-empty list (OpenAPI recommendation)
+                    if enum_values and isinstance(enum_values, list):
+                        prop_details["enum"] = enum_values
+                    
+                    properties_for_schema[key] = prop_details
+
+            # Schema for the 'parameters' object of the function declaration
+            parameters_schema_for_declaration = {
+                "type": "OBJECT", 
+                "properties": properties_for_schema,
+            }
+            
+            required_params = parameters_input_dict.get("required")
+            # Add required only if it's a non-empty list of strings (OpenAPI recommendation)
+            if required_params and isinstance(required_params, list) and all(isinstance(item, str) for item in required_params):
+                parameters_schema_for_declaration["required"] = required_params
+
+            # tool_config.description is Optional[str], which is fine for FunctionDeclaration
+            function_declaration = glm.FunctionDeclaration(
+                name=tool_config.name,
+                description=tool_config.description, 
+                parameters=parameters_schema_for_declaration
             )
-        ]
+            tool_declarations.append(function_declaration)
+
+        return [glm.Tool(function_declarations=tool_declarations)] if tool_declarations else None
 
     def _convert_grounding_to_glm_tool(self, dynamic_threshold: Optional[float]) -> list["glm.Tool"]:
         """
@@ -449,7 +479,10 @@ class VertexAiLargeLanguageModel(LargeLanguageModel):
             else None
         )
         project_id = credentials["vertex_project_id"]
-        location = credentials["vertex_location"]
+        if "preview" in model:
+            location = "us-central1"
+        else:
+            location = credentials["vertex_location"]
         if service_account_info:
             service_accountSA = service_account.Credentials.from_service_account_info(service_account_info)
             aiplatform.init(credentials=service_accountSA, project=project_id, location=location)
@@ -479,31 +512,51 @@ class VertexAiLargeLanguageModel(LargeLanguageModel):
                 else:
                     history.append(content)
 
-        google_model = glm.GenerativeModel(model_name=model, system_instruction=system_instruction)
+        if dynamic_threshold is not None and model.startswith("gemini-2."):
+            SCOPES = [
+                "https://www.googleapis.com/auth/cloud-platform",
+                "https://www.googleapis.com/auth/generative-language"
+            ]
+            credential = service_account.Credentials.from_service_account_info(
+                service_account_info,
+                scopes=SCOPES
+            )
+            client = genai.Client(credentials=credential, project=project_id, location=location, vertexai=True)
 
-        if dynamic_threshold is not None:
-            tools = self._convert_grounding_to_glm_tool(dynamic_threshold=dynamic_threshold)
+            google_search_tool = Tool(google_search=GoogleSearch())
+            response = client.models.generate_content(
+                model=model,
+                contents=history[0].parts[0].text if history else "",
+                config=GenerateContentConfig(
+                    tools=[google_search_tool],
+                    response_modalities=["TEXT"],
+                )
+            )
         else:
-            tools = self._convert_tools_to_glm_tool(tools) if tools else None
+            google_model = glm.GenerativeModel(model_name=model, system_instruction=system_instruction)
 
-        mime_type = config_kwargs.pop("response_mime_type", None)
-        
-        generation_config_params = config_kwargs.copy()
-        
-        if response_schema:
-            generation_config_params["response_schema"] = response_schema
-            generation_config_params["response_mime_type"] = "application/json"
-        elif mime_type:
-            generation_config_params["response_mime_type"] = mime_type
-        
-        generation_config = glm.GenerationConfig(**generation_config_params)
-        
-        response = google_model.generate_content(
-            contents=history,
-            generation_config=generation_config,
-            stream=stream,
-            tools=tools,
-        )
+            if dynamic_threshold is not None:
+                tools = self._convert_grounding_to_glm_tool(dynamic_threshold=dynamic_threshold)
+            else:
+                tools = self._convert_tools_to_glm_tool(tools) if tools else None
+            mime_type = config_kwargs.pop("response_mime_type", None)
+
+            generation_config_params = config_kwargs.copy()
+
+            if response_schema:
+                generation_config_params["response_schema"] = response_schema
+                generation_config_params["response_mime_type"] = "application/json"
+            elif mime_type:
+                generation_config_params["response_mime_type"] = mime_type
+
+            generation_config = glm.GenerationConfig(**generation_config_params)
+
+            response = google_model.generate_content(
+                contents=history,
+                generation_config=generation_config,
+                stream=stream,
+                tools=tools,
+            )
         if stream:
             return self._handle_generate_stream_response(model, credentials, response, prompt_messages)
         return self._handle_generate_response(model, credentials, response, prompt_messages)
@@ -557,7 +610,14 @@ class VertexAiLargeLanguageModel(LargeLanguageModel):
         """
         index = -1
         for chunk in response:
-            candidate = chunk.candidates[0]
+            if isinstance(chunk, tuple):
+                key, value = chunk
+                if key == 'candidates':
+                    candidate = value[0]
+                else:
+                    continue
+            else:
+                candidate = chunk.candidates[0]
             for part in candidate.content.parts:
                 assistant_prompt_message = AssistantPromptMessage(content="", tool_calls=[])
 
@@ -590,7 +650,7 @@ class VertexAiLargeLanguageModel(LargeLanguageModel):
                     reference_lines = []
                     grounding_chunks = None
                     try:
-                        grounding_chunks = chunk.candidates[0].grounding_metadata.grounding_chunks
+                        grounding_chunks = candidate.grounding_metadata.grounding_chunks
                     except AttributeError:
                         try:
                             candidate_dict = chunk.candidates[0].to_dict()
