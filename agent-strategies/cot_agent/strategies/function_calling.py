@@ -39,8 +39,8 @@ class FunctionCallingParams(BaseModel):
 
 
 class FunctionCallingAgentStrategy(AgentStrategy):
-    def __init__(self, session):
-        super().__init__(session)
+    def __init__(self, runtime, session):
+        super().__init__(runtime, session)
         self.query = ""
         self.instruction = ""
 
@@ -305,17 +305,24 @@ class FunctionCallingAgentStrategy(AgentStrategy):
                             },
                         )
                         result = ""
-                        for response in tool_invoke_responses:
-                            if response.type == ToolInvokeMessage.MessageType.TEXT:
+                        for tool_invoke_response in tool_invoke_responses:
+                            if (
+                                tool_invoke_response.type
+                                == ToolInvokeMessage.MessageType.TEXT
+                            ):
                                 result += cast(
-                                    ToolInvokeMessage.TextMessage, response.message
+                                    ToolInvokeMessage.TextMessage,
+                                    tool_invoke_response.message,
                                 ).text
-                            elif response.type == ToolInvokeMessage.MessageType.LINK:
+                            elif (
+                                tool_invoke_response.type
+                                == ToolInvokeMessage.MessageType.LINK
+                            ):
                                 result += (
-                                    f"result link: {cast(ToolInvokeMessage.TextMessage, response.message).text}."
+                                    f"result link: {cast(ToolInvokeMessage.TextMessage, tool_invoke_response.message).text}."
                                     + " please tell user to check it."
                                 )
-                            elif response.type in {
+                            elif tool_invoke_response.type in {
                                 ToolInvokeMessage.MessageType.IMAGE_LINK,
                                 ToolInvokeMessage.MessageType.IMAGE,
                             }:
@@ -323,16 +330,22 @@ class FunctionCallingAgentStrategy(AgentStrategy):
                                     "image has been created and sent to user already, "
                                     + "you do not need to create it, just tell the user to check it now."
                                 )
-                            elif response.type == ToolInvokeMessage.MessageType.JSON:
+                            elif (
+                                tool_invoke_response.type
+                                == ToolInvokeMessage.MessageType.JSON
+                            ):
                                 text = json.dumps(
                                     cast(
-                                        ToolInvokeMessage.JsonMessage, response.message
+                                        ToolInvokeMessage.JsonMessage,
+                                        tool_invoke_response.message,
                                     ).json_object,
                                     ensure_ascii=False,
                                 )
                                 result += f"tool response: {text}."
                             else:
-                                result += f"tool response: {response.message!r}."
+                                result += (
+                                    f"tool response: {tool_invoke_response.message!r}."
+                                )
                     except Exception as e:
                         result = f"tool invoke error: {e!s}"
                     tool_response = {
