@@ -1,7 +1,7 @@
-model: meta.llama-3.3-70b-instruct
+model: xai.grok-3
 label:
-  zh_Hans: meta.llama-3.3-70b-instruct
-  en_US: meta.llama-3.3-70b-instruct
+  zh_Hans: xai.grok-3
+  en_US: xai.grok-3
 model_type: llm
 features:
   - agent-thought
