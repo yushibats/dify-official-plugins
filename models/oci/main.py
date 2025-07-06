@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from dify_plugin import Plugin, DifyPluginEnv
 
 plugin = Plugin(DifyPluginEnv(MAX_REQUEST_TIMEOUT=120))
