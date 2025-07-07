@@ -298,26 +298,25 @@ class OCILargeLanguageModel(LargeLanguageModel):
                 ):
                     for c in message.content:
                         if c.type == PromptMessageContentType.TEXT:
+                            # 必ず c.data を使う
                             message_contents.append({
                                 "type": "TEXT",
                                 "text": c.data
                             })
                         elif c.type == PromptMessageContentType.IMAGE:
-                            # 画像データがbase64形式かURLかを判定
-                            if c.data.startswith('data:image'):
-                                # base64データの場合
+                            # base64 or URL を判定
+                            if c.data.startswith("data:image"):
                                 message_contents.append({
                                     "type": "IMAGE",
                                     "source": {
                                         "type": "base64",
-                                        "media_type": "image/jpeg",  # または適切なmime type
-                                        "data": c.data.split(',')[1]  # data:image/jpeg;base64,の後の部分
+                                        "media_type": "image/jpeg",  # 適切な MIME タイプに変更可
+                                        "data": c.data.split(",", 1)[1]
                                     }
                                 })
                             else:
-                                # URLの場合（元の形式を試す）
                                 message_contents.append({
-                                    "type": "IMAGE",
+                                    "type": "IMAGE_URL",
                                     "image_url": {"url": c.data}
                                 })
                 else:
@@ -326,19 +325,18 @@ class OCILargeLanguageModel(LargeLanguageModel):
                         "type": "TEXT",
                         "text": text
                     })
-                
+
                 meta_messages.append({
                     "role": message.role.name,
                     "content": message_contents
                 })
 
-            args = {
+            request_args["chatRequest"].update({
                 "apiFormat": "GENERIC",
                 "messages": meta_messages,
                 "numGenerations": 1,
                 "topK": -1,
-            }
-            request_args["chatRequest"].update(args)
+            })
         elif model.startswith("xai"):
             xai_messages = []
             for message in prompt_messages:
