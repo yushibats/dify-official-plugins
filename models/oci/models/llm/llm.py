@@ -288,10 +288,9 @@ class OCILargeLanguageModel(LargeLanguageModel):
             }
             request_args["chatRequest"].update(args)
         elif model.startswith("meta"):
-            meta_messages: list[dict] = []
+            meta_messages = []
             for message in prompt_messages:
-                contents: list[dict] = []
-                # multimodal user message?
+                message_contents: list[dict] = []
                 if (
                     isinstance(message, UserPromptMessage)
                     and isinstance(message.content, list)
@@ -299,27 +298,37 @@ class OCILargeLanguageModel(LargeLanguageModel):
                 ):
                     for c in message.content:
                         if c.type == PromptMessageContentType.TEXT:
-                            contents.append({
+                            # 必ず c.data を使う
+                            message_contents.append({
                                 "type": "TEXT",
                                 "text": c.data
                             })
                         elif c.type == PromptMessageContentType.IMAGE:
-                            # always send as IMAGE_URL
-                            contents.append({
-                                "type": "IMAGE_URL",
-                                "image_url": { "url": c.data }
-                            })
+                            # base64 or URL を判定
+                            if c.data.startswith("data:image"):
+                                message_contents.append({
+                                    "type": "IMAGE",
+                                    "source": {
+                                        "type": "base64",
+                                        "media_type": "image/jpeg",  # 適切な MIME タイプに変更可
+                                        "data": c.data.split(",", 1)[1]
+                                    }
+                                })
+                            else:
+                                message_contents.append({
+                                    "type": "IMAGE_URL",
+                                    "image_url": {"url": c.data}
+                                })
                 else:
-                    # regular text message
                     text = message.content if isinstance(message.content, str) else str(message.content)
-                    contents.append({
+                    message_contents.append({
                         "type": "TEXT",
                         "text": text
                     })
 
                 meta_messages.append({
                     "role": message.role.name,
-                    "content": contents
+                    "content": message_contents
                 })
 
             request_args["chatRequest"].update({
