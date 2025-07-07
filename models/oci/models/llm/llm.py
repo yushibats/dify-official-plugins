@@ -61,7 +61,7 @@ class OCILargeLanguageModel(LargeLanguageModel):
         },
         "meta.llama-3.2-90b-vision-instruct": {
             "system": True,
-            "multimodal": True,
+            "multimodal": False,
             "tool_call": False,
             "stream_tool_call": False,
         },
@@ -73,15 +73,15 @@ class OCILargeLanguageModel(LargeLanguageModel):
         },
         "meta.llama-4-maverick-17b-128e-instruct-fp8": {
             "system": True,
-            "multimodal": True,
+            "multimodal": False,
             "tool_call": True,
-            "stream_tool_call": False,
+            "stream_tool_call": True,
         },
         "meta.llama-4-scout-17b-16e-instruct": {
             "system": True,
-            "multimodal": True,
+            "multimodal": False,
             "tool_call": True,
-            "stream_tool_call": False,
+            "stream_tool_call": True,
         },
         "cohere.command-r-08-2024": {
             "system": True,
