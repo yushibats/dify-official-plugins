@@ -290,41 +290,9 @@ class OCILargeLanguageModel(LargeLanguageModel):
         elif model.startswith("meta"):
             meta_messages = []
             for message in prompt_messages:
-                message_contents: list[dict] = []
-                if (
-                    isinstance(message, UserPromptMessage)
-                    and isinstance(message.content, list)
-                    and self._is_multimodal_supported(model)
-                ):
-                    for c in message.content:
-                        if c.type == PromptMessageContentType.TEXT:
-                            message_contents.append({
-                                "type": "TEXT",
-                                "text": c.data
-                            })
-                        elif c.type == PromptMessageContentType.IMAGE:
-                            message_contents.append({
-                                "type": "IMAGE",
-                                "image_url": {"url": c.data}
-                            })
-                else:
-                    text = message.content if isinstance(message.content, str) else str(message.content)
-                    message_contents.append({
-                        "type": "TEXT",
-                        "text": text
-                    })
-
-                meta_messages.append({
-                    "role": message.role.name,
-                    "content": message_contents
-                })
-
-            args = {
-                "apiFormat": "GENERIC",
-                "messages": meta_messages,
-                "numGenerations": 1,
-                "topK": -1,
-            }
+                text = message.content
+                meta_messages.append({"role": message.role.name, "content": [{"type": "TEXT", "text": text}]})
+            args = {"apiFormat": "GENERIC", "messages": meta_messages, "numGenerations": 1, "topK": -1}
             request_args["chatRequest"].update(args)
         elif model.startswith("xai"):
             xai_messages = []
