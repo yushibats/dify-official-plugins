@@ -27,18 +27,6 @@ from dify_plugin.errors.model import (
 from dify_plugin.interfaces.model.large_language_model import LargeLanguageModel
 from oci.generative_ai_inference.models.base_chat_response import BaseChatResponse
 
-from oci.generative_ai_inference.models import (
-    ChatDetails,
-    OnDemandServingMode,
-    GenericChatRequest,
-    UserMessage,
-    SystemMessage,
-    AssistantMessage,
-    TextContent,
-    ImageContent,
-    ImageUrl,
-)
-
 logger = logging.getLogger(__name__)
 request_template = {
     "compartmentId": "",
@@ -300,57 +288,46 @@ class OCILargeLanguageModel(LargeLanguageModel):
             }
             request_args["chatRequest"].update(args)
         elif model.startswith("meta"):
-            # ────── 1) PromptMessage → OCI の Message オブジェクトへ変換 ──────
-            oci_msgs: list[Union[UserMessage, SystemMessage, AssistantMessage]] = []
-            for pm in prompt_messages:
-                # Content の組み立て
-                contents: list[Union[TextContent, ImageContent]] = []
-                if isinstance(pm.content, list) and self._is_multimodal_supported(model):
-                    # マルチモーダル対応
-                    for c in pm.content:
+            meta_messages: list[dict] = []
+            for message in prompt_messages:
+                contents: list[dict] = []
+                # multimodal user message?
+                if (
+                    isinstance(message, UserPromptMessage)
+                    and isinstance(message.content, list)
+                    and self._is_multimodal_supported(model)
+                ):
+                    for c in message.content:
                         if c.type == PromptMessageContentType.TEXT:
-                            contents.append(TextContent(text=c.data))
+                            contents.append({
+                                "type": "TEXT",
+                                "text": c.data
+                            })
                         elif c.type == PromptMessageContentType.IMAGE:
-                            # URL 前提の例
-                            contents.append(ImageContent(image_url=ImageUrl(url=c.data)))
+                            # always send as IMAGE_URL
+                            contents.append({
+                                "type": "IMAGE_URL",
+                                "image_url": { "url": c.data }
+                            })
                 else:
-                    # 通常のテキストのみ
-                    txt = pm.content if isinstance(pm.content, str) else str(pm.content)
-                    contents.append(TextContent(text=txt))
+                    # regular text message
+                    text = message.content if isinstance(message.content, str) else str(message.content)
+                    contents.append({
+                        "type": "TEXT",
+                        "text": text
+                    })
 
-                # ロールに応じて User/System/AssistantMessage を生成
-                role_name = pm.role.name
-                if role_name == "USER":
-                    oci_msgs.append(UserMessage(content=contents))
-                elif role_name == "SYSTEM":
-                    oci_msgs.append(SystemMessage(content=contents))
-                else:
-                    oci_msgs.append(AssistantMessage(content=contents))
+                meta_messages.append({
+                    "role": message.role.name,
+                    "content": contents
+                })
 
-            # ────── 2) GenericChatRequest を組み立て ──────
-            # 必要に応じて model_parameters からパラメータを取り出してください
-            max_tokens = model_parameters.pop("maxTokens", 600)
-            chat_req = GenericChatRequest(
-                api_format=GenericChatRequest.API_FORMAT_GENERIC,
-                messages=oci_msgs,
-                num_generations=1,
-                top_k=-1,
-                max_tokens=max_tokens,
-                temperature=model_parameters.get("temperature", 1),
-                top_p=model_parameters.get("topP", 0.75),
-                frequency_penalty=model_parameters.get("frequencyPenalty", 0),
-                presence_penalty=model_parameters.get("presencePenalty", 0),
-                is_stream=stream,
-            )
-
-            # ────── 3) ChatDetails を作成して呼び出し ──────
-            serving_mode = OnDemandServingMode(model_id=model)
-            chat_details = ChatDetails(
-                compartment_id=compartment_id,
-                serving_mode=serving_mode,
-                chat_request=chat_req,
-            )
-            response = client.chat(chat_details)
+            request_args["chatRequest"].update({
+                "apiFormat": "GENERIC",
+                "messages": meta_messages,
+                "numGenerations": 1,
+                "topK": -1,
+            })
         elif model.startswith("xai"):
             xai_messages = []
             for message in prompt_messages:
