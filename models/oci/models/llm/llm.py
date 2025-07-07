@@ -303,17 +303,30 @@ class OCILargeLanguageModel(LargeLanguageModel):
                                 "text": c.data
                             })
                         elif c.type == PromptMessageContentType.IMAGE:
-                            message_contents.append({
-                                "type": "IMAGE",
-                                "image_url": {"url": c.data}
-                            })
+                            # 画像データがbase64形式かURLかを判定
+                            if c.data.startswith('data:image'):
+                                # base64データの場合
+                                message_contents.append({
+                                    "type": "IMAGE",
+                                    "source": {
+                                        "type": "base64",
+                                        "media_type": "image/jpeg",  # または適切なmime type
+                                        "data": c.data.split(',')[1]  # data:image/jpeg;base64,の後の部分
+                                    }
+                                })
+                            else:
+                                # URLの場合（元の形式を試す）
+                                message_contents.append({
+                                    "type": "IMAGE",
+                                    "image_url": {"url": c.data}
+                                })
                 else:
                     text = message.content if isinstance(message.content, str) else str(message.content)
                     message_contents.append({
                         "type": "TEXT",
                         "text": text
                     })
-
+                
                 meta_messages.append({
                     "role": message.role.name,
                     "content": message_contents
