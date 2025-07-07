@@ -350,6 +350,8 @@ class OCILargeLanguageModel(LargeLanguageModel):
                         assistant_prompt_message.content += chunk["text"]
                 elif model.startswith("meta"):
                     assistant_prompt_message.content += chunk["message"]["content"][0]["text"]
+                elif model.startswith("xai"):
+                    assistant_prompt_message.content += chunk["message"]["content"][0]["text"]
                 index += 1
                 yield LLMResultChunk(
                     model=model,
