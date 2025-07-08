@@ -288,11 +288,43 @@ class OCILargeLanguageModel(LargeLanguageModel):
             }
             request_args["chatRequest"].update(args)
         elif model.startswith("meta"):
+            from typing import cast
+            from dify_plugin.entities.model.message import PromptMessageContentType, TextPromptMessageContent, ImagePromptMessageContent
             meta_messages = []
             for message in prompt_messages:
-                text = message.content
-                meta_messages.append({"role": message.role.name, "content": [{"type": "TEXT", "text": text}]})
-            args = {"apiFormat": "GENERIC", "messages": meta_messages, "numGenerations": 1, "topK": -1}
+                if isinstance(message.content, list):
+                    sub_messages = []
+                    for mc in message.content:
+                        if mc.type == PromptMessageContentType.TEXT:
+                            text_mc = cast(TextPromptMessageContent, mc)
+                            sub_messages.append({
+                                "type": "TEXT",
+                                "text": text_mc.data,
+                            })
+                        elif mc.type == PromptMessageContentType.IMAGE:
+                            img_mc = cast(ImagePromptMessageContent, mc)
+                            sub_messages.append({
+                                "type": "IMAGE",
+                                "imageUrl": {
+                                    "url": img_mc.data,
+                                    "detail": img_mc.detail.value,
+                                },
+                            })
+                    meta_messages.append({
+                        "role": message.role.name,
+                        "content": sub_messages,
+                    })
+                else:
+                    meta_messages.append({
+                        "role": message.role.name,
+                        "content": [{"type": "text", "text": message.content}],
+                    })
+            args = {
+                "apiFormat": "GENERIC",
+                "messages": meta_messages,
+                "numGenerations": 1,
+                "topK": -1,
+            }
             request_args["chatRequest"].update(args)
         elif model.startswith("xai"):
             xai_messages = []
