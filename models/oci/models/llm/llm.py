@@ -333,6 +333,13 @@ class OCILargeLanguageModel(LargeLanguageModel):
                 xai_messages.append({"role": message.role.name, "content": [{"type": "TEXT", "text": text}]})
             args = {"apiFormat": "GENERIC","messages": xai_messages,"numGenerations": 1,"topK": -1,}
             request_args["chatRequest"].update(args)
+        elif model.startswith("xai"):
+            xai_messages = []
+            for message in prompt_messages:
+                text = message.content
+                xai_messages.append({"role": message.role.name, "content": [{"type": "TEXT", "text": text}]})
+            args = {"apiFormat": "GENERIC","messages": xai_messages,"numGenerations": 1,"topK": -1,}
+            request_args["chatRequest"].update(args)
         if stream:
             request_args["chatRequest"]["isStream"] = True
         response = client.chat(request_args)
