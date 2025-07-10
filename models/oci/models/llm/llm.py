@@ -61,7 +61,7 @@ class OCILargeLanguageModel(LargeLanguageModel):
         },
         "meta.llama-3.2-90b-vision-instruct": {
             "system": True,
-            "multimodal": False,
+            "multimodal": True,
             "tool_call": False,
             "stream_tool_call": False,
         },
@@ -73,13 +73,13 @@ class OCILargeLanguageModel(LargeLanguageModel):
         },
         "meta.llama-4-maverick-17b-128e-instruct-fp8": {
             "system": True,
-            "multimodal": False,
+            "multimodal": True,
             "tool_call": True,
             "stream_tool_call": True,
         },
         "meta.llama-4-scout-17b-16e-instruct": {
             "system": True,
-            "multimodal": False,
+            "multimodal": True,
             "tool_call": True,
             "stream_tool_call": True,
         },
@@ -290,6 +290,11 @@ class OCILargeLanguageModel(LargeLanguageModel):
         elif model.startswith("meta"):
             from typing import cast
             from dify_plugin.entities.model.message import PromptMessageContentType, TextPromptMessageContent, ImagePromptMessageContent
+            from dify_plugin.entities.model.message import (
+                PromptMessageContentType,
+                TextPromptMessageContent,
+                ImagePromptMessageContent,
+            )
             meta_messages = []
             for message in prompt_messages:
                 if isinstance(message.content, list):
@@ -303,10 +308,27 @@ class OCILargeLanguageModel(LargeLanguageModel):
                             })
                         elif mc.type == PromptMessageContentType.IMAGE:
                             img_mc = cast(ImagePromptMessageContent, mc)
+                            img_url = img_mc.data
+                            if not img_url.startswith("data:"):
+                                try:
+                                    if img_url.startswith("http://") or img_url.startswith("https://"):
+                                        resp = requests.get(img_url)
+                                        resp.raise_for_status()
+                                        mime_type = resp.headers.get("Content-Type") or mimetypes.guess_type(img_url)[0] or "image/png"
+                                        img_bytes = resp.content
+                                    else:
+                                        with open(img_url, "rb") as f:
+                                            img_bytes = f.read()
+                                        mime_type = mimetypes.guess_type(img_url)[0] or "image/png"
+                                    base64_data = base64.b64encode(img_bytes).decode("utf-8")
+                                    img_url = f"data:{mime_type};base64,{base64_data}"
+                                except Exception as exc:
+                                    raise InvokeBadRequestError(f"Failed to load image: {exc}")
                             sub_messages.append({
                                 "type": "IMAGE",
                                 "imageUrl": {
                                     "url": img_mc.data,
+                                    "url": img_url,
                                     "detail": img_mc.detail.value,
                                 },
                             })
@@ -318,20 +340,20 @@ class OCILargeLanguageModel(LargeLanguageModel):
                     meta_messages.append({
                         "role": message.role.name,
                         "content": [{"type": "text", "text": message.content}],
+                        "content": [
+                            {
+                                "type": "TEXT",
+                                "text": message.content,
+                            }
+                        ],
                     })
+
             args = {
                 "apiFormat": "GENERIC",
                 "messages": meta_messages,
                 "numGenerations": 1,
                 "topK": -1,
             }
-            request_args["chatRequest"].update(args)
-        elif model.startswith("xai"):
-            xai_messages = []
-            for message in prompt_messages:
-                text = message.content
-                xai_messages.append({"role": message.role.name, "content": [{"type": "TEXT", "text": text}]})
-            args = {"apiFormat": "GENERIC","messages": xai_messages,"numGenerations": 1,"topK": -1,}
             request_args["chatRequest"].update(args)
         elif model.startswith("xai"):
             xai_messages = []
