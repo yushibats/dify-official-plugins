@@ -409,68 +409,65 @@ class OCILargeLanguageModel(LargeLanguageModel):
         return result
 
     def _handle_generate_stream_response(
-        self, model: str, credentials: dict, response: BaseChatResponse, prompt_messages: list[PromptMessage]
-    ) -> Generator:
-        """
-        Handle llm stream response
+            self, model: str, credentials: dict, response: BaseChatResponse, prompt_messages: list[PromptMessage]
+        ) -> Generator:
+            """
+            Handle llm stream response
 
-        :param model: model name
-        :param credentials: credentials
-        :param response: response
-        :param prompt_messages: prompt messages
-        :return: llm response chunk generator result
-        """
-        index = -1
-        events = response.data.events()
-        full_text = ""
-        final_chunk = None
-        for stream in events:
-            chunk = json.loads(stream.data)
-            text = ""
-            if model.startswith("cohere"):
-                text = chunk.get("text", "")
-            elif model.startswith("meta"):
-                text = chunk.get("message", {}).get("content", [{}])[0].get("text", "")
-            elif model.startswith("xai"):
-                text = chunk.get("message", {}).get("content", [{}])[0].get("text", "")
-            if text:
-                full_text += text
-                index += 1
-                assistant_prompt_message = AssistantPromptMessage(content=text)
+            :param model: model name
+            :param credentials: credentials
+            :param response: response
+            :param prompt_messages: prompt messages
+            :return: llm response chunk generator result
+            """
+            index = -1
+            events = response.data.events()
+            full_text = ""
+            
+            for stream in events:
+                chunk = json.loads(stream.data)
+                
                 if "finishReason" not in chunk:
-                    yield LLMResultChunk(
-                        model=model,
-                        prompt_messages=prompt_messages,
-                        delta=LLMResultChunkDelta(index=index, message=assistant_prompt_message),
-                    )
+                    assistant_prompt_message = AssistantPromptMessage(content="")
+                    
+                    if model.startswith("cohere"):
+                        if chunk.get("text"):
+                            assistant_prompt_message.content = chunk["text"]
+                            full_text += chunk["text"]
+                    elif model.startswith("meta"):
+                        if chunk.get("message", {}).get("content", [{}])[0].get("text"):
+                            text = chunk["message"]["content"][0]["text"]
+                            assistant_prompt_message.content = text
+                            full_text += text
+                    elif model.startswith("xai"):
+                        if chunk.get("message", {}).get("content", [{}])[0].get("text"):
+                            text = chunk["message"]["content"][0]["text"]
+                            assistant_prompt_message.content = text
+                            full_text += text
+                    
+                    if assistant_prompt_message.content:
+                        index += 1
+                        yield LLMResultChunk(
+                            model=model,
+                            prompt_messages=prompt_messages,
+                            delta=LLMResultChunkDelta(index=index, message=assistant_prompt_message),
+                        )
                 else:
-                    final_chunk = LLMResultChunk(
+                    # 最終チャンクの処理
+                    prompt_tokens = self.get_num_characters(model, credentials, prompt_messages)
+                    completion_tokens = self.get_num_characters(model, credentials, [AssistantPromptMessage(content=full_text)])
+                    usage = self._calc_response_usage(model, credentials, prompt_tokens, completion_tokens)
+                    yield LLMResultChunk(
                         model=model,
                         prompt_messages=prompt_messages,
                         delta=LLMResultChunkDelta(
                             index=index,
-                            message=assistant_prompt_message,
+                            message=AssistantPromptMessage(content=""),
                             finish_reason=str(chunk["finishReason"]),
+                            usage=usage,
                         ),
                     )
-            elif "finishReason" in chunk:
-                final_chunk = LLMResultChunk(
-                    model=model,
-                    prompt_messages=prompt_messages,
-                    delta=LLMResultChunkDelta(
-                        index=index,
-                        message=AssistantPromptMessage(content=""),
-                        finish_reason=str(chunk["finishReason"]),
-                    ),
-                )
-
-        if final_chunk is not None:
-            prompt_tokens = self.get_num_characters(model, credentials, prompt_messages)
-            completion_tokens = self.get_num_characters(model, credentials, [AssistantPromptMessage(content=full_text)])
-            usage = self._calc_response_usage(model, credentials, prompt_tokens, completion_tokens)
-            final_chunk.delta.usage = usage
-            yield final_chunk
-
+            
     def _convert_one_message_to_text(self, message: PromptMessage) -> str:
         """
         Convert a single message to a string.
