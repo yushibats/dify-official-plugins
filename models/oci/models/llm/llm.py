@@ -2,8 +2,10 @@ import base64
 import copy
 import json
 import logging
+import mimetypes
 from collections.abc import Generator
 from typing import Optional, Union
+import requests
 import oci
 from dify_plugin.entities.model.llm import LLMResult, LLMResultChunk, LLMResultChunkDelta
 from dify_plugin.entities.model.message import (
@@ -96,6 +98,24 @@ class OCILargeLanguageModel(LargeLanguageModel):
             "stream_tool_call": False,
         },
         "xai.grok-3": {
+            "system": True,
+            "multimodal": False,
+            "tool_call": True,
+            "stream_tool_call": True,
+        },
+       "xai.grok-3-mini": {
+            "system": True,
+            "multimodal": False,
+            "tool_call": True,
+            "stream_tool_call": True,
+        },
+       "xai.grok-3-fast": {
+            "system": True,
+            "multimodal": False,
+            "tool_call": True,
+            "stream_tool_call": True,
+        },
+       "xai.grok-3-mini-fast": {
             "system": True,
             "multimodal": False,
             "tool_call": True,
@@ -402,37 +422,54 @@ class OCILargeLanguageModel(LargeLanguageModel):
         """
         index = -1
         events = response.data.events()
+        full_text = ""
+        final_chunk = None
         for stream in events:
             chunk = json.loads(stream.data)
-            if "finishReason" not in chunk:
-                assistant_prompt_message = AssistantPromptMessage(content="")
-                if model.startswith("cohere"):
-                    if chunk["text"]:
-                        assistant_prompt_message.content += chunk["text"]
-                elif model.startswith("meta"):
-                    assistant_prompt_message.content += chunk["message"]["content"][0]["text"]
-                elif model.startswith("xai"):
-                    assistant_prompt_message.content += chunk["message"]["content"][0]["text"]
+            text = ""
+            if model.startswith("cohere"):
+                text = chunk.get("text", "")
+            elif model.startswith("meta"):
+                text = chunk.get("message", {}).get("content", [{}])[0].get("text", "")
+            elif model.startswith("xai"):
+                text = chunk.get("message", {}).get("content", [{}])[0].get("text", "")
+            if text:
+                full_text += text
                 index += 1
-                yield LLMResultChunk(
-                    model=model,
-                    prompt_messages=prompt_messages,
-                    delta=LLMResultChunkDelta(index=index, message=assistant_prompt_message),
-                )
-            else:
-                prompt_tokens = self.get_num_characters(model, credentials, prompt_messages)
-                completion_tokens = self.get_num_characters(model, credentials, [assistant_prompt_message])
-                usage = self._calc_response_usage(model, credentials, prompt_tokens, completion_tokens)
-                yield LLMResultChunk(
+                assistant_prompt_message = AssistantPromptMessage(content=text)
+                if "finishReason" not in chunk:
+                    yield LLMResultChunk(
+                        model=model,
+                        prompt_messages=prompt_messages,
+                        delta=LLMResultChunkDelta(index=index, message=assistant_prompt_message),
+                    )
+                else:
+                    final_chunk = LLMResultChunk(
+                        model=model,
+                        prompt_messages=prompt_messages,
+                        delta=LLMResultChunkDelta(
+                            index=index,
+                            message=assistant_prompt_message,
+                            finish_reason=str(chunk["finishReason"]),
+                        ),
+                    )
+            elif "finishReason" in chunk:
+                final_chunk = LLMResultChunk(
                     model=model,
                     prompt_messages=prompt_messages,
                     delta=LLMResultChunkDelta(
                         index=index,
-                        message=assistant_prompt_message,
+                        message=AssistantPromptMessage(content=""),
                         finish_reason=str(chunk["finishReason"]),
-                        usage=usage,
                     ),
                 )
+
+        if final_chunk is not None:
+            prompt_tokens = self.get_num_characters(model, credentials, prompt_messages)
+            completion_tokens = self.get_num_characters(model, credentials, [AssistantPromptMessage(content=full_text)])
+            usage = self._calc_response_usage(model, credentials, prompt_tokens, completion_tokens)
+            final_chunk.delta.usage = usage
+            yield final_chunk
 
     def _convert_one_message_to_text(self, message: PromptMessage) -> str:
         """
