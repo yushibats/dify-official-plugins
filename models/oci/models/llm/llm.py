@@ -38,8 +38,6 @@ request_template = {
         "apiFormat": "COHERE",
         "maxTokens": 600,
         "isStream": False,
-        "frequencyPenalty": 0,
-        "presencePenalty": 0,
         "temperature": 1,
         "topP": 0.75,
     },
@@ -281,9 +279,25 @@ class OCILargeLanguageModel(LargeLanguageModel):
         chat_history = []
         system_prompts = []
         request_args["chatRequest"]["maxTokens"] = model_parameters.pop("maxTokens", 600)
-        request_args["chatRequest"].update(model_parameters)
-        frequency_penalty = model_parameters.get("frequencyPenalty", 0)
-        presence_penalty = model_parameters.get("presencePenalty", 0)
+        # request_args["chatRequest"].update(model_parameters)
+        if model in ("xai.grok-3-mini-fast", "xai.grok-3-mini"):
+            safe_model_parameters = {
+                "temperature": model_parameters.get("temperature", 1),
+                "topP": model_parameters.get("topP", 0.75),
+            }
+            frequency_penalty = 0
+            presence_penalty = 0
+        else:
+            safe_model_parameters = {
+                "frequencyPenalty": model_parameters.get("frequencyPenalty", 0),
+                "presencePenalty": model_parameters.get("presencePenalty", 0),
+                "temperature": model_parameters.get("temperature", 1),
+                "topP": model_parameters.get("topP", 0.75),
+            }
+            frequency_penalty = safe_model_parameters["frequencyPenalty"]
+            presence_penalty = safe_model_parameters["presencePenalty"]
+
+        request_args["chatRequest"].update(safe_model_parameters)
         if frequency_penalty > 0 and presence_penalty > 0:
             raise InvokeBadRequestError("Cannot set both frequency penalty and presence penalty")
         valid_value = self._is_tool_call_supported(model, stream)
@@ -317,6 +331,7 @@ class OCILargeLanguageModel(LargeLanguageModel):
                 ImagePromptMessageContent,
             )
 
+            # まず全ての画像 URL を集めて「最後の画像」を選定
             all_images = []
             for msg in prompt_messages:
                 if isinstance(msg.content, list):
@@ -324,12 +339,13 @@ class OCILargeLanguageModel(LargeLanguageModel):
                         if mc.type == PromptMessageContentType.IMAGE:
                             all_images.append(cast(ImagePromptMessageContent, mc).data)
             last_image_url = all_images[-1] if all_images else None
-            used_image = False 
+            used_image = False  # 画像使用フラグ
 
             meta_messages = []
             for message in prompt_messages:
                 sub_messages = []
 
+                # (A) もし content が list なら、その中身をループ
                 if isinstance(message.content, list):
                     for mc in message.content:
                         if mc.type == PromptMessageContentType.TEXT:
@@ -339,10 +355,12 @@ class OCILargeLanguageModel(LargeLanguageModel):
                         elif mc.type == PromptMessageContentType.IMAGE:
                             img_data = cast(ImagePromptMessageContent, mc).data
 
+                            # 1枚目の画像のみ処理、以降はスキップ
                             if used_image or img_data != last_image_url:
                                 continue
                             used_image = True
 
+                            # data URI ならそのまま、そうでなければダウンロード／Base64
                             if img_data.startswith("data:"):
                                 img_url = img_data
                             else:
@@ -370,23 +388,28 @@ class OCILargeLanguageModel(LargeLanguageModel):
                                 "imageUrl": {"url": img_url, "detail": mc.detail.value},
                             })
 
+                # (B) content が文字列（TEXT）の場合
                 else:
                     sub_messages.append({"type": "TEXT", "text": message.content})
 
+                # TEXT／IMAGE が１つも入っていないメッセージはスキップ
                 if not sub_messages:
                     continue
 
+                # ロール名とともに配列に追加
                 meta_messages.append({
                     "role": message.role.name,
                     "content": sub_messages,
                 })
 
+            # それでも空になってしまったら、最後のテキストだけを強制的に入れるフォールバック
             if not meta_messages and prompt_messages:
                 last = prompt_messages[-1]
                 meta_messages.append({
                     "role": last.role.name,
                     "content": [{"type": "TEXT", "text": last.content}],
                 })
+
             args = {
                 "apiFormat": "GENERIC",
                 "messages": meta_messages,
