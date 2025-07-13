@@ -1,3 +1,4 @@
+import os
 import base64
 import copy
 import json
@@ -54,6 +55,7 @@ oci_config_template = {
 
 
 class OCILargeLanguageModel(LargeLanguageModel):
+    CONTEXT_TOKEN_LIMIT: int = int(os.getenv("OCI_LLM_CONTEXT_TOKENS", 2000))
     _supported_models = {
         "meta.llama-3.1-405b-instruct": {
             "system": True,
@@ -251,19 +253,6 @@ class OCILargeLanguageModel(LargeLanguageModel):
         :param user: unique user id
         :return: full response or stream response chunk generator result
         """
-        MAX_CONTEXT_TOKENS = 2000
-        total_tokens = self.get_num_tokens(model, credentials, prompt_messages)
-        if total_tokens > MAX_CONTEXT_TOKENS:
-            truncated: list[PromptMessage] = []
-            tokens_accum = 0
-            for msg in reversed(prompt_messages):
-                msg_tokens = self.get_num_tokens(model, credentials, [msg])
-                if tokens_accum + msg_tokens <= MAX_CONTEXT_TOKENS:
-                    truncated.insert(0, msg)
-                    tokens_accum += msg_tokens
-                else:
-                    break
-            prompt_messages = truncated
         oci_config = copy.deepcopy(oci_config_template)
         if "oci_config_content" in credentials:
             oci_config_content = base64.b64decode(credentials.get("oci_config_content")).decode("utf-8")
@@ -322,20 +311,26 @@ class OCILargeLanguageModel(LargeLanguageModel):
             request_args["chatRequest"].update(args)
         elif model.startswith("meta"):
             from typing import cast
-            from dify_plugin.entities.model.message import PromptMessageContentType, TextPromptMessageContent, ImagePromptMessageContent
+            from dify_plugin.entities.model.message import (
+                PromptMessageContentType,
+                TextPromptMessageContent,
+                ImagePromptMessageContent,
+            )
 
             all_images = []
             for msg in prompt_messages:
                 if isinstance(msg.content, list):
                     for mc in msg.content:
                         if mc.type == PromptMessageContentType.IMAGE:
-                            all_images.append(mc.data)
+                            all_images.append(cast(ImagePromptMessageContent, mc).data)
             last_image_url = all_images[-1] if all_images else None
+            used_image = False 
 
             meta_messages = []
             for message in prompt_messages:
+                sub_messages = []
+
                 if isinstance(message.content, list):
-                    sub_messages = []
                     for mc in message.content:
                         if mc.type == PromptMessageContentType.TEXT:
                             txt = cast(TextPromptMessageContent, mc).data
@@ -343,14 +338,23 @@ class OCILargeLanguageModel(LargeLanguageModel):
 
                         elif mc.type == PromptMessageContentType.IMAGE:
                             img_data = cast(ImagePromptMessageContent, mc).data
-                            if img_data != last_image_url:
+
+                            if used_image or img_data != last_image_url:
                                 continue
-                            if not img_data.startswith("data:"):
+                            used_image = True
+
+                            if img_data.startswith("data:"):
+                                img_url = img_data
+                            else:
                                 try:
                                     if img_data.startswith(("http://", "https://")):
                                         resp = requests.get(img_data)
                                         resp.raise_for_status()
-                                        mime_type = resp.headers.get("Content-Type") or mimetypes.guess_type(img_data)[0] or "image/png"
+                                        mime_type = (
+                                            resp.headers.get("Content-Type")
+                                            or mimetypes.guess_type(img_data)[0]
+                                            or "image/png"
+                                        )
                                         img_bytes = resp.content
                                     else:
                                         with open(img_data, "rb") as f:
@@ -360,21 +364,29 @@ class OCILargeLanguageModel(LargeLanguageModel):
                                     img_url = f"data:{mime_type};base64,{base64_data}"
                                 except Exception as exc:
                                     raise InvokeBadRequestError(f"Failed to load image: {exc}")
-                            else:
-                                img_url = img_data
+
                             sub_messages.append({
                                 "type": "IMAGE",
-                                "imageUrl": {
-                                    "url": img_url,
-                                    "detail": mc.detail.value,
-                                },
+                                "imageUrl": {"url": img_url, "detail": mc.detail.value},
                             })
 
-                    meta_messages.append({
-                        "role": message.role.name,
-                        "content": sub_messages,
-                    })
+                else:
+                    sub_messages.append({"type": "TEXT", "text": message.content})
 
+                if not sub_messages:
+                    continue
+
+                meta_messages.append({
+                    "role": message.role.name,
+                    "content": sub_messages,
+                })
+
+            if not meta_messages and prompt_messages:
+                last = prompt_messages[-1]
+                meta_messages.append({
+                    "role": last.role.name,
+                    "content": [{"type": "TEXT", "text": last.content}],
+                })
             args = {
                 "apiFormat": "GENERIC",
                 "messages": meta_messages,
