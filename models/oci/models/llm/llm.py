@@ -251,6 +251,19 @@ class OCILargeLanguageModel(LargeLanguageModel):
         :param user: unique user id
         :return: full response or stream response chunk generator result
         """
+        MAX_CONTEXT_TOKENS = 2000
+        total_tokens = self.get_num_tokens(model, credentials, prompt_messages)
+        if total_tokens > MAX_CONTEXT_TOKENS:
+            truncated: list[PromptMessage] = []
+            tokens_accum = 0
+            for msg in reversed(prompt_messages):
+                msg_tokens = self.get_num_tokens(model, credentials, [msg])
+                if tokens_accum + msg_tokens <= MAX_CONTEXT_TOKENS:
+                    truncated.insert(0, msg)
+                    tokens_accum += msg_tokens
+                else:
+                    break
+            prompt_messages = truncated
         oci_config = copy.deepcopy(oci_config_template)
         if "oci_config_content" in credentials:
             oci_config_content = base64.b64decode(credentials.get("oci_config_content")).decode("utf-8")
@@ -310,62 +323,56 @@ class OCILargeLanguageModel(LargeLanguageModel):
         elif model.startswith("meta"):
             from typing import cast
             from dify_plugin.entities.model.message import PromptMessageContentType, TextPromptMessageContent, ImagePromptMessageContent
-            from dify_plugin.entities.model.message import (
-                PromptMessageContentType,
-                TextPromptMessageContent,
-                ImagePromptMessageContent,
-            )
+
+            all_images = []
+            for msg in prompt_messages:
+                if isinstance(msg.content, list):
+                    for mc in msg.content:
+                        if mc.type == PromptMessageContentType.IMAGE:
+                            all_images.append(mc.data)
+            last_image_url = all_images[-1] if all_images else None
+
             meta_messages = []
             for message in prompt_messages:
                 if isinstance(message.content, list):
                     sub_messages = []
                     for mc in message.content:
                         if mc.type == PromptMessageContentType.TEXT:
-                            text_mc = cast(TextPromptMessageContent, mc)
-                            sub_messages.append({
-                                "type": "TEXT",
-                                "text": text_mc.data,
-                            })
+                            txt = cast(TextPromptMessageContent, mc).data
+                            sub_messages.append({"type": "TEXT", "text": txt})
+
                         elif mc.type == PromptMessageContentType.IMAGE:
-                            img_mc = cast(ImagePromptMessageContent, mc)
-                            img_url = img_mc.data
-                            if not img_url.startswith("data:"):
+                            img_data = cast(ImagePromptMessageContent, mc).data
+                            if img_data != last_image_url:
+                                continue
+                            if not img_data.startswith("data:"):
                                 try:
-                                    if img_url.startswith("http://") or img_url.startswith("https://"):
-                                        resp = requests.get(img_url)
+                                    if img_data.startswith(("http://", "https://")):
+                                        resp = requests.get(img_data)
                                         resp.raise_for_status()
-                                        mime_type = resp.headers.get("Content-Type") or mimetypes.guess_type(img_url)[0] or "image/png"
+                                        mime_type = resp.headers.get("Content-Type") or mimetypes.guess_type(img_data)[0] or "image/png"
                                         img_bytes = resp.content
                                     else:
-                                        with open(img_url, "rb") as f:
+                                        with open(img_data, "rb") as f:
                                             img_bytes = f.read()
-                                        mime_type = mimetypes.guess_type(img_url)[0] or "image/png"
+                                        mime_type = mimetypes.guess_type(img_data)[0] or "image/png"
                                     base64_data = base64.b64encode(img_bytes).decode("utf-8")
                                     img_url = f"data:{mime_type};base64,{base64_data}"
                                 except Exception as exc:
                                     raise InvokeBadRequestError(f"Failed to load image: {exc}")
+                            else:
+                                img_url = img_data
                             sub_messages.append({
                                 "type": "IMAGE",
                                 "imageUrl": {
-                                    "url": img_mc.data,
                                     "url": img_url,
-                                    "detail": img_mc.detail.value,
+                                    "detail": mc.detail.value,
                                 },
                             })
+
                     meta_messages.append({
                         "role": message.role.name,
                         "content": sub_messages,
-                    })
-                else:
-                    meta_messages.append({
-                        "role": message.role.name,
-                        "content": [{"type": "text", "text": message.content}],
-                        "content": [
-                            {
-                                "type": "TEXT",
-                                "text": message.content,
-                            }
-                        ],
                     })
 
             args = {
@@ -453,7 +460,6 @@ class OCILargeLanguageModel(LargeLanguageModel):
                             delta=LLMResultChunkDelta(index=index, message=assistant_prompt_message),
                         )
                 else:
-                    # 最終チャンクの処理
                     prompt_tokens = self.get_num_characters(model, credentials, prompt_messages)
                     completion_tokens = self.get_num_characters(model, credentials, [AssistantPromptMessage(content=full_text)])
                     usage = self._calc_response_usage(model, credentials, prompt_tokens, completion_tokens)
