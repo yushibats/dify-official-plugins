@@ -121,6 +121,12 @@ class OCILargeLanguageModel(LargeLanguageModel):
             "tool_call": True,
             "stream_tool_call": True,
         },
+        "gemini-2.5-pro": {
+            "system": True,
+            "multimodal": False,
+            "tool_call": True,
+            "stream_tool_call": True,
+        },
     }
 
     def _is_tool_call_supported(self, model_id: str, stream: bool = False) -> bool:
@@ -431,6 +437,13 @@ class OCILargeLanguageModel(LargeLanguageModel):
                 xai_messages.append({"role": message.role.name, "content": [{"type": "TEXT", "text": text}]})
             args = {"apiFormat": "GENERIC","messages": xai_messages,"numGenerations": 1,"topK": -1,}
             request_args["chatRequest"].update(args)
+        elif model.startswith("gemini"):
+            xai_messages = []
+            for message in prompt_messages:
+                text = message.content
+                xai_messages.append({"role": message.role.name, "content": [{"type": "TEXT", "text": text}]})
+            args = {"apiFormat": "GENERIC","messages": xai_messages,"numGenerations": 1,"topK": -1,}
+            request_args["chatRequest"].update(args)
         if stream:
             request_args["chatRequest"]["isStream"] = True
         response = client.chat(request_args)
@@ -489,6 +502,11 @@ class OCILargeLanguageModel(LargeLanguageModel):
                             assistant_prompt_message.content = text
                             full_text += text
                     elif model.startswith("xai"):
+                        if chunk.get("message", {}).get("content", [{}])[0].get("text"):
+                            text = chunk["message"]["content"][0]["text"]
+                            assistant_prompt_message.content = text
+                            full_text += text
+                    elif model.startswith("gemini"):
                         if chunk.get("message", {}).get("content", [{}])[0].get("text"):
                             text = chunk["message"]["content"][0]["text"]
                             assistant_prompt_message.content = text
